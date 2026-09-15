@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>마크다운 워드(.docx) 변환기</title>
+  
+  <!-- Tailwind CSS CDN for modern responsive UI -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Marked.js for markdown parsing -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+  
+  <!-- docx.js for pure client-side Word document generation -->
+  <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+    
+    * {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Malgun Gothic', '맑은 고딕', sans-serif;
+    }
+
+    /* Custom scrollbars */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+
+    /* Markdown preview styled for Word document resemblance */
+    .word-preview {
+      background-color: #ffffff;
+      color: #1e293b;
+      line-height: 1.7;
+    }
+    .word-preview h1 {
+      font-size: 1.75rem;
+      font-weight: 800;
+      color: #1e3a8a;
+      border-bottom: 2px solid #e2e8f0;
+      padding-bottom: 0.4rem;
+      margin-top: 1.5rem;
+      margin-bottom: 0.75rem;
+    }
+    .word-preview h2 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: #1d4ed8;
+      margin-top: 1.25rem;
+      margin-bottom: 0.5rem;
+    }
+    .word-preview h3 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #334155;
+      margin-top: 1rem;
+      margin-bottom: 0.4rem;
+    }
+    .word-preview p {
+      margin-bottom: 0.8rem;
+    }
+    .word-preview ul {
+      list-style-type: disc;
+      padding-left: 1.5rem;
+      margin-bottom: 0.8rem;
+    }
+    .word-preview ol {
+      list-style-type: decimal;
+      padding-left: 1.5rem;
+      margin-bottom: 0.8rem;
+    }
+    .word-preview li {
+      margin-bottom: 0.25rem;
+    }
+    .word-preview table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0;
+      font-size: 0.925rem;
+    }
+    .word-preview th, .word-preview td {
+      border: 1px solid #cbd5e1;
+      padding: 0.6rem 0.85rem;
+      text-align: left;
+    }
+    .word-preview th {
+      background-color: #f1f5f9;
+      font-weight: 700;
+      color: #0f172a;
+    }
+    .word-preview blockquote {
+      border-left: 4px solid #3b82f6;
+      background-color: #eff6ff;
+      padding: 0.6rem 1rem;
+      margin: 0.8rem 0;
+      color: #1e40af;
+      border-radius: 0 0.375rem 0.375rem 0;
+    }
+    .word-preview pre {
+      background-color: #0f172a;
+      color: #f8fafc;
+      padding: 1rem;
+      border-radius: 0.5rem;
+      overflow-x: auto;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 0.875rem;
+      margin: 1rem 0;
+    }
+    .word-preview code:not(pre code) {
+      background-color: #f1f5f9;
+      color: #be123c;
+      padding: 0.15rem 0.4rem;
+      border-radius: 0.25rem;
+      font-size: 0.875rem;
+      font-family: 'Consolas', monospace;
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col antialiased">
+
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
+      <!-- Logo & App Title -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20">
+          <i data-lucide="file-text" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="font-bold text-slate-900 text-base sm:text-lg tracking-tight">MD to Word (.docx)</h1>
+            <span class="text-[11px] font-semibold tracking-wide bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">클라이언트 전용</span>
+          </div>
+          <p class="text-xs text-slate-500 hidden sm:block">서버 전송 없이 100% 브라우저에서 안전하게 변환</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 sm:gap-3">
+        <!-- Document Filename Input -->
+        <div class="relative flex items-center">
+          <input
+            id="filenameInput"
+            type="text"
+            value="변환_문서"
+            placeholder="파일 이름 입력"
+            class="w-32 sm:w-48 pl-3 pr-14 py-1.5 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
+          />
+          <span class="absolute right-3 text-xs font-semibold text-slate-400 select-none pointer-events-none">.docx</span>
+        </div>
+
+        <!-- Sample Load Button -->
+        <button
+          id="loadSampleBtn"
+          class="hidden md:flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition"
+          title="기본 마크다운 예제 불러오기"
+        >
+          <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-500"></i>
+          <span>예제 넣기</span>
+        </button>
+
+        <!-- Primary Conversion Button -->
+        <button
+          id="convertBtn"
+          class="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 active:scale-95 rounded-lg shadow-sm shadow-blue-600/30 transition-all cursor-pointer"
+        >
+          <i data-lucide="download" class="w-4 h-4" id="convertIcon"></i>
+          <span id="convertText">워드로 변환</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <section class="bg-gradient-to-r from-blue-50 via-indigo-50 to-slate-50 border-b border-blue-100/70 px-4 py-2.5">
+    <div class="max-w-7xl mx-auto flex items-center justify-between text-xs sm:text-sm text-slate-700">
+      <div class="flex items-center gap-2">
+        <span class="flex h-2 w-2 rounded-full bg-blue-600 animate-pulse"></span>
+        <span class="font-medium">
+          <strong class="text-blue-900">사용법:</strong> 왼쪽 창에 마크다운을 붙여넣거나 <strong>.md 파일</strong>을 올린 뒤, 우측 상단 <strong>[워드로 변환]</strong>을 누르면 즉시 다운로드됩니다.
+        </span>
+      </div>
+      <div class="hidden lg:flex items-center gap-4 text-xs text-slate-500">
+        <span class="flex items-center gap-1"><i data-lucide="check" class="w-3.5 h-3.5 text-emerald-600"></i> 한글(맑은 고딕) 완벽 지원</span>
+        <span class="flex items-center gap-1"><i data-lucide="check" class="w-3.5 h-3.5 text-emerald-600"></i> 표·제목·코드블록 서식 보존</span>
+      </div>
+    </div>
+  </section>
+
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+    
+    <!-- LEFT PANEL: Markdown Input & Upload Zone -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col h-[750px] overflow-hidden">
+      <!-- Input Card Header -->
+      <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <i data-lucide="edit-3" class="w-4 h-4 text-slate-600"></i>
+          <span class="font-semibold text-sm text-slate-800">마크다운 원문 입력</span>
+        </div>
+        
+        <div class="flex items-center gap-2">
+          <!-- File Upload Input (Hidden) -->
+          <input type="file" id="fileUploadInput" accept=".md,.markdown,.txt" class="hidden" />
+          
+          <button
+            id="uploadTriggerBtn"
+            class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-100 rounded-lg transition shadow-xs"
+          >
+            <i data-lucide="upload-cloud" class="w-3.5 h-3.5 text-blue-600"></i>
+            <span>.md 파일 열기</span>
+          </button>
+          
+          <button
+            id="clearBtn"
+            class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+            title="모두 지우기"
+          >
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="relative flex-1 flex flex-col p-4">
+        <!-- Drag and Drop Overlay -->
+        <div
+          id="dropOverlay"
+          class="absolute inset-0 bg-blue-50/90 border-2 border-dashed border-blue-400 m-3 rounded-xl flex flex-col items-center justify-center gap-2 pointer-events-none hidden z-20 backdrop-blur-xs transition-all"
+        >
+          <div class="p-3 bg-blue-600 text-white rounded-full shadow-lg">
+            <i data-lucide="file-down" class="w-6 h-6"></i>
+          </div>
+          <p class="text-sm font-bold text-blue-900">여기에 .md 파일을 놓아주세요</p>
+          <p class="text-xs text-blue-600">파일을 놓으면 바로 편집창에 불러옵니다</p>
+        </div>
+
+        <textarea
+          id="markdownTextarea"
+          spellcheck="false"
+          placeholder="여기에 마크다운 문법(# 제목, - 목록, | 표 등)을 직접 작성하거나 붙여넣으세요..."
+          class="w-full flex-1 resize-none bg-transparent font-mono text-sm leading-relaxed text-slate-800 placeholder-slate-400 focus:outline-none"
+        ></textarea>
+      </div>
+
+      <!-- Left Card Footer Stats -->
+      <div class="px-4 py-2.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
+        <div class="flex items-center gap-3">
+          <span id="charCount">0 자</span>
+          <span>•</span>
+          <span id="lineCount">0 줄</span>
+        </div>
+        <div class="flex items-center gap-1.5 text-emerald-600 font-medium">
+          <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+          <span>로컬 전용 (데이터 유출 안심)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT PANEL: Live Document Preview -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col h-[750px] overflow-hidden">
+      <!-- Preview Card Header -->
+      <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <i data-lucide="eye" class="w-4 h-4 text-slate-600"></i>
+          <span class="font-semibold text-sm text-slate-800">실시간 워드 서식 미리보기</span>
+        </div>
+        
+        <div class="flex items-center gap-2">
+          <span class="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 bg-slate-200/70 px-2 py-1 rounded-md">
+            <i data-lucide="type" class="w-3 h-3 text-slate-500"></i>
+            <span>맑은 고딕(Malgun Gothic) 11pt</span>
+          </span>
+        </div>
+      </div>
+
+      <!-- Preview Content Scrollable Body -->
+      <div id="previewScrollArea" class="flex-1 overflow-y-auto p-6 sm:p-8 word-preview">
+        <div id="previewContainer"></div>
+      </div>
+
+      <!-- Right Card Footer Features -->
+      <div class="px-4 py-2.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
+        <span class="flex items-center gap-1.5">
+          <i data-lucide="layers" class="w-3.5 h-3.5 text-blue-500"></i>
+          <span>워드 표준 XML(OpenXML .docx) 규격</span>
+        </span>
+        <span class="text-slate-400">Microsoft Word, 한글과컴퓨터 뷰어 호환</span>
+      </div>
+    </div>
+
+  </main>
+
+  <div id="toast" class="fixed bottom-5 right-5 transform translate-y-20 opacity-0 transition-all duration-300 z-50 flex items-center gap-2 px-4 py-3 rounded-xl shadow-xl text-sm font-medium text-white pointer-events-none">
+    <i id="toastIcon" data-lucide="info" class="w-4 h-4"></i>
+    <span id="toastMsg">알림 메시지</span>
+  </div>
+
+  <script>
+    // Sample Markdown Dataset
+    const SAMPLE_CONTENT = `# 📊 2026년 3분기 디지털 혁신 프로젝트 계획서
+
+이 문서는 **브라우저에서 직접 Word(.docx) 파일로 변환**된 문서입니다.
+백엔드 서버 전송 없이 로컬에서 즉시 안전하게 변환되며, 한글 글꼴이 깨지지 않고 온전히 유지됩니다.
+
+---
+
+## 1. 개요 및 추진 목표
+1. **클라이언트 사이드 고속 변환**: 서버 없이 웹 브라우저 메모리 안에서만 문서 생성
+2. **한글 폰트 완벽 지원**: 표준 맑은 고딕(Malgun Gothic) 적용
+3. **서식 일치성 보존**: 제목, 목록, 굵게, 기울임, 표, 코드 블록 유지
+
+---
+
+## 2. 세부 기능 및 아키텍처 비교
+
+마크다운 표(Table) 역시 워드 테이블 서식과 테두리, 배경색으로 깔끔하게 변환됩니다:
+
+| 구분 | 적용 기술 | 세부 특징 | 워드 반영 여부 |
+| :--- | :---: | :--- | :---: |
+| 마크다운 분석 | marked.js | 실시간 AST 토큰 분해 | 완벽 반영 |
+| 문서 빌더 | docx.js | 브라우저 전용 OpenXML 패키징 | 완벽 반영 |
+| 기본 글꼴 | Malgun Gothic | 한글 자간 및 인코딩 깨짐 방지 | 완벽 반영 |
+| 테마 스타일 | Slate & Blue | 가독성 높은 헤딩 및 인용구 스타일 | 완벽 반영 |
+
+---
+
+## 3. 프로그램 코드 예시
+
+개발 문서 및 기술 매뉴얼 작성을 위해 코드 블록 서식도 지원합니다:
+
+\`\`\`javascript
+// 클라이언트에서 100% 실행되는 워드 변환 함수
+async function generateDocx(markdownText) {
+  const tokens = marked.lexer(markdownText);
+  const doc = buildWordDocument(tokens);
+  const blob = await docx.Packer.toBlob(doc);
+  return blob; // 자동 다운로드 실행!
+}
+\`\`\`
+
+> **📌 실무 팁:**
+> 상단 파일명을 변경한 후 [워드로 변환] 버튼을 누르면 원하는 파일명으로 즉시 저장됩니다.
+`;
+
+    const textarea = document.getElementById('markdownTextarea');
+    const preview = document.getElementById('previewContainer');
+    const filenameInput = document.getElementById('filenameInput');
+    const convertBtn = document.getElementById('convertBtn');
+    const convertIcon = document.getElementById('convertIcon');
+    const convertText = document.getElementById('convertText');
+    const uploadTriggerBtn = document.getElementById('uploadTriggerBtn');
+    const fileUploadInput = document.getElementById('fileUploadInput');
+    const clearBtn = document.getElementById('clearBtn');
+    const loadSampleBtn = document.getElementById('loadSampleBtn');
+    const charCount = document.getElementById('charCount');
+    const lineCount = document.getElementById('lineCount');
+    const dropOverlay = document.getElementById('dropOverlay');
+    const toast = document.getElementById('toast');
+    const toastMsg = document.getElementById('toastMsg');
+    const toastIcon = document.getElementById('toastIcon');
+
+    // UI Toast Notification helper (replaces alert())
+    function showToast(message, type = 'success') {
+      toastMsg.textContent = message;
+      toast.className = `fixed bottom-5 right-5 transform transition-all duration-300 z-50 flex items-center gap-2 px-4 py-3 rounded-xl shadow-xl text-sm font-semibold text-white pointer-events-none ${
+        type === 'success' ? 'bg-emerald-600 shadow-emerald-900/20' :
+        type === 'error' ? 'bg-rose-600 shadow-rose-900/20' :
+        'bg-blue-600 shadow-blue-900/20'
+      } translate-y-0 opacity-100`;
+      
+      setTimeout(() => {
+        toast.classList.remove('translate-y-0', 'opacity-100');
+        toast.classList.add('translate-y-20', 'opacity-0');
+      }, 3200);
+    }
+
+    function updatePreview() {
+      const content = textarea.value;
+      
+      // Update stats
+      charCount.textContent = `${content.length.toLocaleString()} 자`;
+      lineCount.textContent = `${content ? content.split('\n').length : 0} 줄`;
+
+      if (!content.trim()) {
+        preview.innerHTML = `
+          <div class="h-96 flex flex-col items-center justify-center text-slate-400 text-center select-none">
+            <div class="p-4 bg-slate-100 rounded-full mb-3">
+              <i data-lucide="file-edit" class="w-8 h-8 text-slate-400"></i>
+            </div>
+            <p class="font-semibold text-slate-600 mb-1">작성된 마크다운이 없습니다</p>
+            <p class="text-xs text-slate-400 max-w-xs">왼쪽 입력창에 내용을 입력하거나 파일을 업로드하면 이곳에 실시간 미리보기가 나타납니다.</p>
+          </div>
+        `;
+        lucide.createIcons();
+        return;
+      }
+
+      // Parse with marked for preview
+      try {
+        preview.innerHTML = marked.parse(content, { breaks: true, gfm: true });
+      } catch (err) {
+        console.error("Preview render error:", err);
+      }
+    }
+
+    // Helper to recursively parse inline tokens into docx TextRuns
+    function parseInlineRuns(inlineTokens, defaultOpts = {}) {
+      const runs = [];
+      const fontName = defaultOpts.font || "Malgun Gothic";
+
+      if (!inlineTokens || !Array.isArray(inlineTokens)) {
+        return runs;
+      }
+
+      inlineTokens.forEach(token => {
+        switch (token.type) {
+          case 'strong':
+            if (token.tokens) {
+              runs.push(...parseInlineRuns(token.tokens, { ...defaultOpts, bold: true }));
+            } else {
+              runs.push(new docx.TextRun({
+                text: token.text,
+                bold: true,
+                font: fontName,
+                size: defaultOpts.size || 22,
+                color: defaultOpts.color || "1E293B"
+              }));
+            }
+            break;
+
+          case 'em':
+            if (token.tokens) {
+              runs.push(...parseInlineRuns(token.tokens, { ...defaultOpts, italics: true }));
+            } else {
+              runs.push(new docx.TextRun({
+                text: token.text,
+                italics: true,
+                font: fontName,
+                size: defaultOpts.size || 22,
+                color: defaultOpts.color || "1E293B"
+              }));
+            }
+            break;
+
+          case 'codespan':
+            runs.push(new docx.TextRun({
+              text: ` ${token.text} `,
+              font: "Consolas",
+              size: (defaultOpts.size || 22) - 2,
+              color: "BE123C",
+              shading: {
+                fill: "F1F5F9",
+                type: docx.ShadingType.CLEAR,
+                color: "auto"
+              }
+            }));
+            break;
+
+          case 'del':
+            runs.push(new docx.TextRun({
+              text: token.text,
+              strike: true,
+              font: fontName,
+              size: defaultOpts.size || 22,
+              color: "64748B"
+            }));
+            break;
+
+          case 'link':
+            runs.push(new docx.TextRun({
+              text: token.text,
+              underline: {},
+              color: "2563EB",
+              font: fontName,
+              size: defaultOpts.size || 22
+            }));
+            break;
+
+          case 'text':
+          default:
+            runs.push(new docx.TextRun({
+              text: token.text,
+              bold: !!defaultOpts.bold,
+              italics: !!defaultOpts.italics,
+              font: fontName,
+              size: defaultOpts.size || 22,
+              color: defaultOpts.color || "1E293B"
+            }));
+            break;
+        }
+      });
+
+      return runs;
+    }
+
+    async function convertMarkdownToDocx(markdownContent, docTitle) {
+      const tokens = marked.lexer(markdownContent);
+      const docChildren = [];
+      const primaryFont = "Malgun Gothic";
+
+      for (const token of tokens) {
+        switch (token.type) {
+          case 'heading': {
+            const headingLevels = [
+              docx.HeadingLevel.HEADING_1,
+              docx.HeadingLevel.HEADING_2,
+              docx.HeadingLevel.HEADING_3,
+              docx.HeadingLevel.HEADING_4,
+              docx.HeadingLevel.HEADING_5,
+              docx.HeadingLevel.HEADING_6
+            ];
+            const level = headingLevels[token.depth - 1] || docx.HeadingLevel.HEADING_3;
+            
+            // Sizes in half-points (28pt = 56, 22pt = 44, 18pt = 36, etc.)
+            const sizes = [40, 32, 26, 24, 22, 20];
+            const colors = ["1E3A8A", "1D4ED8", "334155", "334155", "475569", "475569"];
+
+            const runs = parseInlineRuns(token.tokens, {
+              bold: true,
+              font: primaryFont,
+              size: sizes[token.depth - 1] || 24,
+              color: colors[token.depth - 1] || "1E293B"
+            });
+
+            docChildren.push(new docx.Paragraph({
+              heading: level,
+              children: runs,
+              spacing: {
+                before: token.depth === 1 ? 360 : 240,
+                after: 120
+              }
+            }));
+            break;
+          }
+
+          case 'paragraph': {
+            const runs = parseInlineRuns(token.tokens, {
+              font: primaryFont,
+              size: 22,
+              color: "1E293B"
+            });
+
+            docChildren.push(new docx.Paragraph({
+              children: runs,
+              spacing: { before: 80, after: 120, line: 360 }
+            }));
+            break;
+          }
+
+          case 'list': {
+            token.items.forEach((item, index) => {
+              const prefix = token.ordered ? `${index + 1}. ` : "• ";
+              const itemRuns = [
+                new docx.TextRun({
+                  text: prefix,
+                  bold: true,
+                  font: primaryFont,
+                  size: 22,
+                  color: "2563EB"
+                })
+              ];
+
+              if (item.tokens && item.tokens.length > 0) {
+                // Collect inner tokens
+                item.tokens.forEach(child => {
+                  if (child.tokens) {
+                    itemRuns.push(...parseInlineRuns(child.tokens, { font: primaryFont, size: 22 }));
+                  } else {
+                    itemRuns.push(new docx.TextRun({
+                      text: child.text || '',
+                      font: primaryFont,
+                      size: 22
+                    }));
+                  }
+                });
+              } else {
+                itemRuns.push(new docx.TextRun({
+                  text: item.text,
+                  font: primaryFont,
+                  size: 22
+                }));
+              }
+
+              docChildren.push(new docx.Paragraph({
+                children: itemRuns,
+                indent: { left: 400, hanging: 240 },
+                spacing: { before: 40, after: 60 }
+              }));
+            });
+            break;
+          }
+
+          case 'table': {
+            const tableRows = [];
+
+            // Header Row
+            const headerCells = token.header.map(cell => {
+              const runs = parseInlineRuns(cell.tokens, {
+                bold: true,
+                font: primaryFont,
+                size: 20,
+                color: "0F172A"
+              });
+
+              return new docx.TableCell({
+                children: [
+                  new docx.Paragraph({
+                    children: runs,
+                    alignment: docx.AlignmentType.CENTER,
+                    spacing: { before: 80, after: 80 }
+                  })
+                ],
+                shading: {
+                  fill: "F1F5F9",
+                  type: docx.ShadingType.CLEAR,
+                  color: "auto"
+                },
+                margins: { top: 120, bottom: 120, left: 160, right: 160 }
+              });
+            });
+
+            tableRows.push(new docx.TableRow({
+              children: headerCells,
+              tableHeader: true
+            }));
+
+            // Body Rows
+            token.rows.forEach(row => {
+              const bodyCells = row.map(cell => {
+                const runs = parseInlineRuns(cell.tokens, {
+                  font: primaryFont,
+                  size: 20,
+                  color: "334155"
+                });
+
+                return new docx.TableCell({
+                  children: [
+                    new docx.Paragraph({
+                      children: runs,
+                      spacing: { before: 60, after: 60 }
+                    })
+                  ],
+                  margins: { top: 100, bottom: 100, left: 160, right: 160 }
+                });
+              });
+
+              tableRows.push(new docx.TableRow({ children: bodyCells }));
+            });
+
+            docChildren.push(new docx.Table({
+              rows: tableRows,
+              width: { size: 100, type: docx.WidthType.PERCENTAGE },
+              borders: {
+                top: { style: docx.BorderStyle.SINGLE, size: 6, color: "CBD5E1" },
+                bottom: { style: docx.BorderStyle.SINGLE, size: 6, color: "CBD5E1" },
+                left: { style: docx.BorderStyle.SINGLE, size: 6, color: "CBD5E1" },
+                right: { style: docx.BorderStyle.SINGLE, size: 6, color: "CBD5E1" },
+                insideHorizontal: { style: docx.BorderStyle.SINGLE, size: 4, color: "E2E8F0" },
+                insideVertical: { style: docx.BorderStyle.SINGLE, size: 4, color: "E2E8F0" }
+              }
+            }));
+
+            // Spacing after table
+            docChildren.push(new docx.Paragraph({
+              children: [],
+              spacing: { before: 60, after: 120 }
+            }));
+            break;
+          }
+
+          case 'code': {
+            const lines = token.text.split('\n');
+            const codeParagraphs = lines.map(line => {
+              return new docx.Paragraph({
+                children: [
+                  new docx.TextRun({
+                    text: line || ' ',
+                    font: "Consolas",
+                    size: 19, // 9.5pt
+                    color: "1E293B"
+                  })
+                ],
+                spacing: { before: 20, after: 20 },
+                shading: {
+                  fill: "F8FAFC",
+                  type: docx.ShadingType.CLEAR,
+                  color: "auto"
+                }
+              });
+            });
+
+            // Container table for solid border & background
+            docChildren.push(new docx.Table({
+              rows: [
+                new docx.TableRow({
+                  children: [
+                    new docx.TableCell({
+                      children: codeParagraphs,
+                      shading: { fill: "F8FAFC" },
+                      margins: { top: 120, bottom: 120, left: 160, right: 160 }
+                    })
+                  ]
+                })
+              ],
+              width: { size: 100, type: docx.WidthType.PERCENTAGE },
+              borders: {
+                top: { style: docx.BorderStyle.SINGLE, size: 6, color: "E2E8F0" },
+                bottom: { style: docx.BorderStyle.SINGLE, size: 6, color: "E2E8F0" },
+                left: { style: docx.BorderStyle.SINGLE, size: 6, color: "E2E8F0" },
+                right: { style: docx.BorderStyle.SINGLE, size: 6, color: "E2E8F0" }
+              }
+            }));
+
+            docChildren.push(new docx.Paragraph({
+              children: [],
+              spacing: { before: 40, after: 100 }
+            }));
+            break;
+          }
+
+          case 'blockquote': {
+            const quoteRuns = [
+              new docx.TextRun({
+                text: token.text.replace(/^>\s*/gm, ''),
+                italics: true,
+                font: primaryFont,
+                size: 21,
+                color: "1E40AF"
+              })
+            ];
+
+            docChildren.push(new docx.Paragraph({
+              children: quoteRuns,
+              indent: { left: 400 },
+              border: {
+                left: {
+                  color: "3B82F6",
+                  size: 24,
+                  style: docx.BorderStyle.SINGLE
+                }
+              },
+              spacing: { before: 120, after: 120 }
+            }));
+            break;
+          }
+
+          case 'hr': {
+            docChildren.push(new docx.Paragraph({
+              children: [],
+              border: {
+                bottom: {
+                  color: "CBD5E1",
+                  size: 8,
+                  style: docx.BorderStyle.SINGLE
+                }
+              },
+              spacing: { before: 140, after: 140 }
+            }));
+            break;
+          }
+
+          default:
+            break;
+        }
+      }
+
+      const doc = new docx.Document({
+        title: docTitle || "변환_문서",
+        creator: "Markdown to Word WebApp",
+        description: "브라우저에서 직접 변환된 문서",
+        styles: {
+          default: {
+            document: {
+              run: {
+                font: primaryFont,
+                size: 22,
+                color: "1E293B"
+              }
+            }
+          }
+        },
+        sections: [
+          {
+            properties: {
+              page: {
+                margin: {
+                  top: 1440,    // 1 inch = 1440 dxa
+                  right: 1440,
+                  bottom: 1440,
+                  left: 1440
+                }
+              }
+            },
+            children: docChildren.length > 0 ? docChildren : [
+              new docx.Paragraph({
+                children: [
+                  new docx.TextRun({
+                    text: "문서 내용이 비어 있습니다.",
+                    font: primaryFont,
+                    size: 22
+                  })
+                ]
+              })
+            ]
+          }
+        ]
+      });
+
+      return doc;
+    }
+
+    async function handleConversion() {
+      const content = textarea.value.trim();
+      if (!content) {
+        showToast('변환할 마크다운 내용을 입력하거나 파일을 업로드해주세요.', 'error');
+        textarea.focus();
+        return;
+      }
+
+      // Loading state
+      convertBtn.disabled = true;
+      convertBtn.classList.add('opacity-75', 'cursor-not-allowed');
+      convertText.textContent = "변환 중...";
+      convertIcon.innerHTML = `<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>`;
+      convertIcon.classList.add('animate-spin');
+
+      try {
+        const rawFilename = filenameInput.value.trim() || "변환_문서";
+        const sanitizedFilename = rawFilename.replace(/[/\\?%*:|"<>]/g, '_');
+        const finalFilename = sanitizedFilename.endsWith('.docx') ? sanitizedFilename : `${sanitizedFilename}.docx`;
+
+        // 1. Build docx in-memory
+        const doc = await convertMarkdownToDocx(content, sanitizedFilename);
+
+        // 2. Pack to Blob
+        const blob = await docx.Packer.toBlob(doc);
+
+        // 3. Trigger immediate browser download
+        const downloadUrl = URL.createObjectURL(blob);
+        const downloadAnchor = document.createElement('a');
+        downloadAnchor.href = downloadUrl;
+        downloadAnchor.download = finalFilename;
+        document.body.appendChild(downloadAnchor);
+        downloadAnchor.click();
+        document.body.removeChild(downloadAnchor);
+        
+        setTimeout(() => URL.revokeObjectURL(downloadUrl), 1500);
+
+        showToast(`'${finalFilename}' 파일이 성공적으로 다운로드되었습니다!`, 'success');
+      } catch (err) {
+        console.error("Conversion error:", err);
+        showToast('워드 문서 생성 중 오류가 발생했습니다. 입력을 확인해주세요.', 'error');
+      } finally {
+        convertBtn.disabled = false;
+        convertBtn.classList.remove('opacity-75', 'cursor-not-allowed');
+        convertText.textContent = "워드로 변환";
+        convertIcon.innerHTML = `<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line>`;
+        convertIcon.classList.remove('animate-spin');
+        lucide.createIcons();
+      }
+    }
+
+    function loadFileContent(file) {
+      if (!file) return;
+
+      const nameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
+      if (nameWithoutExt) {
+        filenameInput.value = nameWithoutExt;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        textarea.value = e.target.result || '';
+        updatePreview();
+        showToast(`'${file.name}' 파일을 불러왔습니다.`, 'info');
+      };
+      reader.onerror = () => {
+        showToast('파일을 읽는 도중 오류가 발생했습니다.', 'error');
+      };
+      reader.readAsText(file, 'UTF-8');
+    }
+
+    // File upload trigger
+    uploadTriggerBtn.addEventListener('click', () => fileUploadInput.click());
+    fileUploadInput.addEventListener('change', (e) => {
+      const file = e.target.files?.[0];
+      if (file) loadFileContent(file);
+      fileUploadInput.value = '';
+    });
+
+    // Drag and Drop support
+    window.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropOverlay.classList.remove('hidden');
+    });
+
+    window.addEventListener('dragleave', (e) => {
+      if (e.relatedTarget === null) {
+        dropOverlay.classList.add('hidden');
+      }
+    });
+
+    window.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropOverlay.classList.add('hidden');
+      const file = e.dataTransfer?.files?.[0];
+      if (file) loadFileContent(file);
+    });
+
+    // Sample markdown loader
+    loadSampleBtn.addEventListener('click', () => {
+      textarea.value = SAMPLE_CONTENT;
+      filenameInput.value = "디지털_혁신_프로젝트_계획서";
+      updatePreview();
+      showToast('기본 마크다운 예제가 적용되었습니다.', 'info');
+    });
+
+    // Clear button
+    clearBtn.addEventListener('click', () => {
+      textarea.value = '';
+      updatePreview();
+      showToast('내용을 모두 지웠습니다.', 'info');
+    });
+
+    // Real-time input typing
+    textarea.addEventListener('input', updatePreview);
+    convertBtn.addEventListener('click', handleConversion);
+
+    window.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      textarea.value = SAMPLE_CONTENT;
+      updatePreview();
+    });
+  </script>
+</body>
+</html>
